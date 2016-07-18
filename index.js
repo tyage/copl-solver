@@ -6,7 +6,6 @@ const rl = readline.createInterface({
   output: process.stdout
 });
 
-
 rl.on('line', (input) => {
   const result = parser.parse(input);
   console.log(result);
