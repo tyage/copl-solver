@@ -15,5 +15,8 @@
   "bugs": {
     "url": "https://github.com/tyage/copl-solver/issues"
   },
-  "homepage": "https://github.com/tyage/copl-solver#readme"
+  "homepage": "https://github.com/tyage/copl-solver#readme",
+  "dependencies": {
+    "pegjs": "^0.9.0"
+  }
 }
