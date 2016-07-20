@@ -22,8 +22,13 @@
   }
 }
 
+start
+  = Derivation
+  / CompareNat1
+
 Derivation
-  = Zero _ 'plus' _ n:Expression _ 'is' _ n:Expression {
+  = Zero _ 'plus' _ n1:Expression _ 'is' _ n2:Expression {
+      // TODO: check if n1 is equal to n2
       return `${text()} by P-Zero {}`;
     }
   / Sn1:Expression _ 'plus' _ n2:Expression _ 'is' _ Sn:Expression {
@@ -42,6 +47,19 @@ Derivation
       return `${text()} by T-Succ {
   ${parser.parse(`${n1} times ${n2} is ${n3}`)};
   ${parser.parse(`${n2} plus ${n3} is ${n4}`)};
+}`;
+    }
+
+CompareNat1
+  = n1:Expression _ 'is' _ 'less' _ 'than' _ n3:Expression {
+      if (n1.n + 1 === n3.n) {
+        return `${text()} by L-Succ {}`;
+      }
+
+      const n2 = n1.increment();
+      return `${text()} by L-Trans {
+  ${parser.parse(`${n1} is less than ${n2}`)};
+  ${parser.parse(`${n2} is less than ${n3}`)};
 }`;
     }
 
