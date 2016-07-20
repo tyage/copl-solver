@@ -19,7 +19,7 @@
     plus(nat) {
       return new Nat(this.n + nat.n);
     }
-    multiply(nat) {
+    times(nat) {
       return new Nat(this.n * nat.n);
     }
   }
@@ -39,7 +39,7 @@
           this.nat = e1.nat.plus(e2.nat);
           break;
         case '*':
-          this.nat = e1.nat.multiply(e2.nat);
+          this.nat = e1.nat.times(e2.nat);
           break;
       }
     }
@@ -54,11 +54,12 @@
 }
 
 start
-  = Derivation
+  = NatExp
   / CompareNat1
   / EvalNatExp
+  / ReduceNatExp
 
-Derivation
+NatExp
   = Zero _ 'plus' _ n1:Nat _ 'is' _ n2:Nat {
       // TODO: check if n1 is equal to n2
       return `${text()} by P-Zero {}`;
@@ -66,7 +67,7 @@ Derivation
   / Sn1:Nat _ 'plus' _ n2:Nat _ 'is' _ Sn:Nat {
       const n1 = Sn1.decrement();
       const n = Sn.decrement();
-      return `${Sn1} plus ${n2} is ${Sn} by P-Succ {
+      return `${text()} by P-Succ {
   ${parser.parse(`${n1} plus ${n2} is ${n}`)}
 }`;
     }
@@ -75,7 +76,7 @@ Derivation
     }
   / Sn1:Nat _ 'times' _ n2:Nat _ 'is' _ n4:Nat {
       const n1 = Sn1.decrement();
-      const n3 = n1.multiply(n2);
+      const n3 = n1.times(n2);
       return `${text()} by T-Succ {
   ${parser.parse(`${n1} times ${n2} is ${n3}`)};
   ${parser.parse(`${n2} plus ${n3} is ${n4}`)};
@@ -124,6 +125,86 @@ EvalNatExp
       }
     }
 
+ReduceNatExp
+  = e1:Exp _ '-*->' _ e2:Exp {
+      // TODO: 簡約できない場合にはMR-Multiで分割
+      return `${text()} by MR-One {
+  ${parser.parse(`${e1} ---> ${e2}`)}
+}`;
+    }
+  / n1:Nat _ '+' _ n2:Nat _ '--->' _ n3:Nat {
+      return `${text()} by R-Plus {
+  ${parser.parse(`${n1} plus ${n2} is ${n3}`)}
+}`;
+    }
+  / n1:Nat _ '*' _ n2:Nat _ '--->' _ n3:Nat {
+      return `${text()} by R-Times {
+  ${parser.parse(`${n1} times ${n2} is ${n3}`)}
+}`;
+    }
+  / e1:Exp _ '--->' _ e2:Exp {
+      if (e1.op === '*') {
+        if (e1.e1.toString() === e2.e1.toString()) {
+          return `${text()} by R-TimesR {
+  ${parser.parse(`${e1.e2} ---> ${e2.e2}`)}
+}`;
+        } else if (e1.e2.toString() === e2.e2.toString()) {
+          return `${text()} by R-TimesL {
+  ${parser.parse(`${e1.e1} ---> ${e2.e1}`)}
+}`;
+        }
+      }
+      if (e1.op === '+') {
+        if (e1.e1.toString() === e2.e1.toString()) {
+          return `${text()} by R-PlusR {
+  ${parser.parse(`${e1.e2} ---> ${e2.e2}`)}
+}`;
+        } else if (e1.e2.toString() === e2.e2.toString()) {
+          return `${text()} by R-PlusL {
+  ${parser.parse(`${e1.e1} ---> ${e2.e1}`)}
+}`;
+        }
+      }
+
+      throw new Exception(`${text()} not matched`);
+    }
+  / n1:Nat _ '+' _ n2:Nat _ '-d->' _ n3:Nat {
+      return `${text()} by DR-Plus {
+  ${parser.parse(`${n1} plus ${n2} is ${n3}`)}
+}`;
+    }
+  / n1:Nat _ '*' _ n2:Nat _ '-d->' _ n3:Nat {
+      return `${text()} by DR-Times {
+  ${parser.parse(`${n1} times ${n2} is ${n3}`)}
+}`;
+    }
+  / e1:Exp _ '-d->' _ e2:Exp {
+      if (e1.op === '*') {
+        if (e1.e1.toString() === e2.e1.toString()) {
+          return `${text()} by DR-TimesR {
+  ${parser.parse(`${e1.e2} -d-> ${e2.e2}`)}
+}`;
+        } else if (e1.e2.toString() === e2.e2.toString()) {
+          return `${text()} by DR-TimesL {
+  ${parser.parse(`${e1.e1} -d-> ${e2.e1}`)}
+}`;
+        }
+      }
+      if (e1.op === '+') {
+        if (e1.e1.toString() === e2.e1.toString()) {
+          return `${text()} by DR-PlusR {
+  ${parser.parse(`${e1.e2} -d-> ${e2.e2}`)}
+}`;
+        } else if (e1.e2.toString() === e2.e2.toString()) {
+          return `${text()} by DR-PlusL {
+  ${parser.parse(`${e1.e1} -d-> ${e2.e1}`)}
+}`;
+        }
+      }
+
+      throw new Exception(`${text()} not matched`);
+    }
+
 Nat
   = 'S(' _ nat:Nat _ ')' { return nat.increment(); }
   / Zero
@@ -132,14 +213,14 @@ Zero
   = 'Z' { return new Nat(0); }
 
 Exp
-  = e1:ExpMult tail:(_ '+' _ ExpMult)* {
+  = e1:ExpTimes tail:(_ '+' _ ExpTimes)* {
       let result = e1;
       tail.forEach(e => {
         result = new Exp('+', result, e[3]);
       });
       return result;
     }
-ExpMult
+ExpTimes
   = e1:ExpPrimary tail:(_ '*' _ ExpPrimary)* {
       let result = e1;
       tail.forEach(e => {
