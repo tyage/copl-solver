@@ -1,5 +1,9 @@
 const readline = require('readline');
-const parser = require('./copl.js');
+const fs = require('fs');
+const PEG = require('pegjs');
+
+const parserFile = process.argv[2];
+const parser = PEG.buildParser(fs.readFileSync(parserFile).toString());
 
 const rl = readline.createInterface({
   input: process.stdin,

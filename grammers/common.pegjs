@@ -1,3 +1,5 @@
+// TODO: 導出システムごとに分けるべき
+
 {
   class Nat {
     constructor(n) {
