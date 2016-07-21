@@ -8,35 +8,63 @@
       this.e3 = e3;
 
       switch (op) {
-        case '=':
-          this.n = e1;
+        case 'Int':
+        case 'Bool':
+        case 'Error':
+          this.v = e1;
+          this.type = op;
           break;
         case '+':
-          this.n = e1.n + e2.n;
+          if (e1.type === 'Int' && e2.type === 'Int') {
+            this.v = e1.v + e2.v;
+            this.type = 'Int';
+          }
           break;
         case '-':
-          this.n = e1.n - e2.n;
+          if (e1.type === 'Int' && e2.type === 'Int') {
+            this.v = e1.v - e2.v;
+            this.type = 'Int';
+          }
           break;
         case '*':
-          this.n = e1.n * e2.n;
+          if (e1.type === 'Int' && e2.type === 'Int') {
+            this.v = e1.v * e2.v;
+            this.type = 'Int';
+          }
           break;
         case '<':
-          this.bool = (e1.n < e2.n);
+          if (e1.type === 'Int' && e2.type === 'Int') {
+            this.v = (e1.v < e2.v);
+            this.type = 'Bool';
+          }
           break;
         case 'if':
-          this.n = e1.bool ? e2.n : e3.n;
+          if (e1.type === 'Bool' && e2.type === 'Int' && e3.type === 'Int') {
+            this.v = e1.v ? e2.v : e3.v;
+            this.type = e1.v ? e2.type : e3.type;
+          }
           break;
+      }
+
+      if (this.type === undefined) {
+        this.v = 'error';
+        this.type = 'Error';
       }
     }
     toString() {
-      if (this.op === '=') {
-        return this.e1.toString();
+      switch (this.op) {
+        case 'Int':
+        case 'Bool':
+        case 'Error':
+          return this.e1.toString();
+          break;
+        case 'if':
+          return `if ${this.e1} then ${this.e2} else ${this.e3}`;
+          break;
+        default:
+          return `${this.e1} ${this.op} ${this.e2}`;
+          break;
       }
-      if (this.op === 'if') {
-        return `if ${this.e1} then ${this.e2} else ${this.e3}`;
-      }
-
-      return `${this.e1} ${this.op} ${this.e2}`;
     }
   }
 }
@@ -50,47 +78,149 @@ EvalML1
       // TODO: check if b1 === b2
       return `${text()} by E-Bool {}`;
     }
-  / e:Exp _ 'evalto' _ i:Value {
+  / e:Exp _ 'evalto' _ i:Res {
       switch (e.op) {
         case '+':
+          if (e.e1.type === 'Error') {
+            return `${text()} by E-PlusErrorL {
+  ${parser.parse(`${e.e1} evalto ${e.e1.v}`)}
+}`;
+          }
+          if (e.e2.type === 'Error') {
+            return `${text()} by E-PlusErrorR {
+  ${parser.parse(`${e.e2} evalto ${e.e2.v}`)}
+}`;
+          }
+          if (e.e1.type === 'Bool') {
+            return `${text()} by E-PlusBoolL {
+  ${parser.parse(`${e.e1} evalto ${e.e1.v}`)}
+}`;
+          }
+          if (e.e2.type === 'Bool') {
+            return `${text()} by E-PlusBoolR {
+  ${parser.parse(`${e.e2} evalto ${e.e2.v}`)}
+}`;
+          }
           return `${text()} by E-Plus {
-  ${parser.parse(`${e.e1} evalto ${e.e1.n}`)};
-  ${parser.parse(`${e.e2} evalto ${e.e2.n}`)};
-  ${parser.parse(`${e.e1.n} plus ${e.e2.n} is ${i}`)};
+  ${parser.parse(`${e.e1} evalto ${e.e1.v}`)};
+  ${parser.parse(`${e.e2} evalto ${e.e2.v}`)};
+  ${parser.parse(`${e.e1.v} plus ${e.e2.v} is ${i}`)};
 }`;
           break;
         case '-':
+          if (e.e1.type === 'Error') {
+            return `${text()} by E-MinusErrorL {
+  ${parser.parse(`${e.e1} evalto ${e.e1.v}`)}
+}`;
+          }
+          if (e.e2.type === 'Error') {
+            return `${text()} by E-MinusErrorR {
+  ${parser.parse(`${e.e2} evalto ${e.e2.v}`)}
+}`;
+          }
+          if (e.e1.type === 'Bool') {
+            return `${text()} by E-MinusBoolL {
+  ${parser.parse(`${e.e1} evalto ${e.e1.v}`)}
+}`;
+          }
+          if (e.e2.type === 'Bool') {
+            return `${text()} by E-MinusBoolR {
+  ${parser.parse(`${e.e2} evalto ${e.e2.v}`)}
+}`;
+          }
           return `${text()} by E-Minus {
-  ${parser.parse(`${e.e1} evalto ${e.e1.n}`)};
-  ${parser.parse(`${e.e2} evalto ${e.e2.n}`)};
-  ${parser.parse(`${e.e1.n} minus ${e.e2.n} is ${i}`)};
+  ${parser.parse(`${e.e1} evalto ${e.e1.v}`)};
+  ${parser.parse(`${e.e2} evalto ${e.e2.v}`)};
+  ${parser.parse(`${e.e1.v} minus ${e.e2.v} is ${i}`)};
 }`;
           break;
         case '*':
+          if (e.e1.type === 'Error') {
+            return `${text()} by E-TimesErrorL {
+  ${parser.parse(`${e.e1} evalto ${e.e1.v}`)}
+}`;
+          }
+          if (e.e2.type === 'Error') {
+            return `${text()} by E-TimesErrorR {
+  ${parser.parse(`${e.e2} evalto ${e.e2.v}`)}
+}`;
+          }
+          if (e.e1.type === 'Bool') {
+            return `${text()} by E-TimesBoolL {
+  ${parser.parse(`${e.e1} evalto ${e.e1.v}`)}
+}`;
+          }
+          if (e.e2.type === 'Bool') {
+            return `${text()} by E-TimesBoolR {
+  ${parser.parse(`${e.e2} evalto ${e.e2.v}`)}
+}`;
+          }
           return `${text()} by E-Times {
-  ${parser.parse(`${e.e1} evalto ${e.e1.n}`)};
-  ${parser.parse(`${e.e2} evalto ${e.e2.n}`)};
-  ${parser.parse(`${e.e1.n} times ${e.e2.n} is ${i}`)};
+  ${parser.parse(`${e.e1} evalto ${e.e1.v}`)};
+  ${parser.parse(`${e.e2} evalto ${e.e2.v}`)};
+  ${parser.parse(`${e.e1.v} times ${e.e2.v} is ${i}`)};
 }`;
           break;
         case '<':
+          if (e.e1.type === 'Error') {
+            return `${text()} by E-LtErrorL {
+  ${parser.parse(`${e.e1} evalto ${e.e1.v}`)}
+}`;
+          }
+          if (e.e2.type === 'Error') {
+            return `${text()} by E-LtErrorR {
+  ${parser.parse(`${e.e2} evalto ${e.e2.v}`)}
+}`;
+          }
+          if (e.e1.type === 'Bool') {
+            return `${text()} by E-LtBoolL {
+  ${parser.parse(`${e.e1} evalto ${e.e1.v}`)}
+}`;
+          }
+          if (e.e2.type === 'Bool') {
+            return `${text()} by E-LtBoolR {
+  ${parser.parse(`${e.e2} evalto ${e.e2.v}`)}
+}`;
+          }
           return `${text()} by E-Lt {
-  ${parser.parse(`${e.e1} evalto ${e.e1.n}`)};
-  ${parser.parse(`${e.e2} evalto ${e.e2.n}`)};
-  ${parser.parse(`${e.e1.n} less than ${e.e2.n} is ${e.bool}`)};
+  ${parser.parse(`${e.e1} evalto ${e.e1.v}`)};
+  ${parser.parse(`${e.e2} evalto ${e.e2.v}`)};
+  ${parser.parse(`${e.e1.v} less than ${e.e2.v} is ${e.v}`)};
 }`;
           break;
         case 'if':
-          if (e.e1.bool) {
+          if (e.e1.type === 'Int') {
+            return `${text()} by E-IfInt {
+  ${parser.parse(`${e.e1} evalto ${e.e1.v}`)}
+}`;
+          }
+          if (e.e1.type === 'Error') {
+            return `${text()} by E-IfError {
+  ${parser.parse(`${e.e1} evalto ${e.e1.v}`)}
+}`;
+          }
+          if (e.e1.v && e.e2.type === 'Error') {
+            return `${text()} by E-IfTError {
+  ${parser.parse(`${e.e1} evalto true`)};
+  ${parser.parse(`${e.e2} evalto ${e.e2.v}`)}
+}`;
+          }
+          if (!e.e1.v && e.e3.type === 'Error') {
+            return `${text()} by E-IfFError {
+  ${parser.parse(`${e.e1} evalto false`)};
+  ${parser.parse(`${e.e3} evalto ${e.e3.v}`)}
+}`;
+          }
+          if (e.e1.v) {
             return `${text()} by E-IfT {
-      ${parser.parse(`${e.e1} evalto true`)};
-      ${parser.parse(`${e.e2} evalto ${i}`)};
-    }`;
+  ${parser.parse(`${e.e1} evalto true`)};
+  ${parser.parse(`${e.e2} evalto ${i}`)};
+}`;
           } else {
             return `${text()} by E-IfF {
-      ${parser.parse(`${e.e1} evalto false`)};
-      ${parser.parse(`${e.e3} evalto ${i}`)};
-    }`;
+  ${parser.parse(`${e.e1} evalto false`)};
+  ${parser.parse(`${e.e3} evalto ${i}`)};
+}`;
           }
           break;
       }
@@ -111,10 +241,6 @@ EvalML1
       // TODO: check
       return `${text()} by B-Lt {}`;
     }
-
-Value
-  = Int
-  / Bool
 
 Exp
   = ExpComp
@@ -146,7 +272,19 @@ ExpIf
   / ExpPrimary
 ExpPrimary
   = '(' _ exp:Exp _ ')' { return exp; }
-  / i:Int { return new Exp('=', i); }
+  / i:Int { return new Exp('Int', i); }
+  / b:Bool { return new Exp('Bool', b); }
+  / e:Error { return new Exp('Error', e); }
+
+Res
+  = Value
+  / Error
+
+Value
+  = Int
+  / Bool
+
+Error = 'error'
 
 Int
   = [-]?[0-9]+ { return parseInt(text(), 10); }
