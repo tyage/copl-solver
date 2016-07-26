@@ -160,16 +160,18 @@
     }
     toString() {
       const e2 = (this.e2 instanceof FunExp) ? `(${this.e2})` : this.e2.toString();
-      return `${this.e1} ${e2}`;
+      return `(${this.e1} ${e2})`;
     }
     evaluate(env) {
-      const fun = this.e1.evaluate(env).fun;
-      const newEnv = new Env(env, fun.x, this.e2.evaluate(env));
-      const result = fun.e.evaluate(newEnv);
-      return result;
+      const funVal = this.e1.evaluate(env);
+      const newEnv = new Env(funVal.e, funVal.fun.x, this.e2.evaluate(env));
+      return funVal.fun.e.evaluate(newEnv);
     }
   }
 }
+
+start
+  = _ EvalML3 _
 
 EvalML3
   = env:Env _ '|-' _ i1:Int _ 'evalto' _ i2:Int {
@@ -186,7 +188,7 @@ EvalML3
         return `${text()} by E-Var1 {}`;
       } else {
         return `${text()} by E-Var2 {
-  ${parser.parse(`${env.env} |- ${x} evalto ${v}`)}
+${parser.parse(`${env.env} |- ${x} evalto ${v}`)}
 }`;
       }
     }
@@ -200,27 +202,27 @@ EvalML3
         switch (op) {
           case '+':
             return `${text()} by E-Plus {
-  ${parser.parse(`${env} |- ${e1} evalto ${v1.value}`)};
-  ${parser.parse(`${env} |- ${e2} evalto ${v2.value}`)};
-  ${parser.parse(`${v1.value} plus ${v2.value} is ${v}`)};
+${parser.parse(`${env} |- ${e1} evalto ${v1.value}`)};
+${parser.parse(`${env} |- ${e2} evalto ${v2.value}`)};
+${parser.parse(`${v1.value} plus ${v2.value} is ${v}`)};
 }`;
           case '-':
             return `${text()} by E-Minus {
-  ${parser.parse(`${env} |- ${e1} evalto ${v1.value}`)};
-  ${parser.parse(`${env} |- ${e2} evalto ${v2.value}`)};
-  ${parser.parse(`${v1.value} minus ${v2.value} is ${v}`)};
+${parser.parse(`${env} |- ${e1} evalto ${v1.value}`)};
+${parser.parse(`${env} |- ${e2} evalto ${v2.value}`)};
+${parser.parse(`${v1.value} minus ${v2.value} is ${v}`)};
 }`;
           case '*':
             return `${text()} by E-Times {
-  ${parser.parse(`${env} |- ${e1} evalto ${v1.value}`)};
-  ${parser.parse(`${env} |- ${e2} evalto ${v2.value}`)};
-  ${parser.parse(`${v1.value} times ${v2.value} is ${v}`)};
+${parser.parse(`${env} |- ${e1} evalto ${v1.value}`)};
+${parser.parse(`${env} |- ${e2} evalto ${v2.value}`)};
+${parser.parse(`${v1.value} times ${v2.value} is ${v}`)};
 }`;
           case '<':
             return `${text()} by E-Lt {
-  ${parser.parse(`${env} |- ${e1} evalto ${v1.value}`)};
-  ${parser.parse(`${env} |- ${e2} evalto ${v2.value}`)};
-  ${parser.parse(`${v1.value} less than ${v2.value} is ${v}`)};
+${parser.parse(`${env} |- ${e1} evalto ${v1.value}`)};
+${parser.parse(`${env} |- ${e2} evalto ${v2.value}`)};
+${parser.parse(`${v1.value} less than ${v2.value} is ${v}`)};
 }`;
         }
 
@@ -247,19 +249,23 @@ ${parser.parse(`${env} |- ${e.e3} evalto ${v}`)};
         const env2 = new Env(env, variable, v1);
 
         return `${text()} by E-Let {
-  ${parser.parse(`${env} |- ${e1} evalto ${v1}`)};
-  ${parser.parse(`${env2} |- ${e2} evalto ${v}`)};
+${parser.parse(`${env} |- ${e1} evalto ${v1}`)};
+${parser.parse(`${env2} |- ${e2} evalto ${v}`)};
 }`;
       };
       const evaluateApply = (e1, e2) => {
         const v1 = e.e1.evaluate(env);
         const v2 = e.e2.evaluate(env);
+        if (!(v1 instanceof FunValue)) {
+          console.log(e);
+          throw Error('v1 is not a function');
+        }
         const e0 = v1.fun.e;
         const env2 = new Env(v1.e, v1.fun.x, v2);
         return `${text()} by E-App {
-  ${parser.parse(`${env} |- ${e.e1} evalto ${v1}`)};
-  ${parser.parse(`${env} |- ${e.e2} evalto ${v2}`)};
-  ${parser.parse(`${env2} |- ${e0} evalto ${v}`)};
+${parser.parse(`${env} |- ${e.e1} evalto ${v1}`)};
+${parser.parse(`${env} |- ${e.e2} evalto ${v2}`)};
+${parser.parse(`${env2} |- ${e0} evalto ${v}`)};
 }`;
       };
 
@@ -341,9 +347,15 @@ Fun
     }
   / '(' _ f:Fun _ ')' { return f; }
 Apply
-  = v:Var _ e:ExpPrim {
-      return new ApplyExp(new Exp('Var', v), e);
+  = v:Var _ arg0:ExpPrim args:(_ ExpPrim)* {
+      let apply = new ApplyExp(new Exp('Var', v), arg0);
+      args.forEach(arg => {
+        apply = new ApplyExp(apply, arg[1]);
+      });
+      return apply;
     }
+  / '(' _ a:Apply _ ')' { return a; }
+  / '(' _ e1:Exp _ e2:Exp _ ')' { return new ApplyExp(e1, e2); }
 
 Env
   = bind:(Var _ '=' _ Value) binds:(',' _ Var _ '=' _ Value)* {
@@ -365,10 +377,10 @@ FunValue
   = '(' _ e:Env _ ')[' _ fun:Fun _ ']' { return new FunValue(e, fun); }
 
 Var
-  = !ReservedWord [A-Za-z_]+
+  = !ReservedWord string:[A-Za-z_]+ { return string.join(''); }
 
 ReservedWord
-  = ( "let" / "rec" / "fun" / "evalto" / "if" / "else" / "in" ) ![A-Za-z_]
+  = ( "let" / "rec" / "fun" / "evalto" / "if" / "else" / "then" / "in" ) ![A-Za-z_]
 
 Bool
   = 'true' { return true; }
