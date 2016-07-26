@@ -9,26 +9,26 @@
     }
   }
   class FunValue extends Value {
-    constructor(e, fun) {
+    constructor(env, fun) {
       super();
 
-      this.e = e;
+      this.env = env;
       this.fun = fun;
     }
     toString() {
-      return `(${this.e})[${this.fun}]`;
+      return `(${this.env})[${this.fun}]`;
     }
   }
   class RecFunValue extends Value {
-    constructor(e, x, fun) {
+    constructor(env, x, fun) {
       super();
 
-      this.e = e;
+      this.env = env;
       this.x = x;
       this.fun = fun;
     }
     toString() {
-      return `(${this.e})[rec ${this.x} = ${this.fun}]`;
+      return `(${this.env})[rec ${this.x} = ${this.fun}]`;
     }
   }
 
@@ -164,7 +164,7 @@
     }
     evaluate(env) {
       const funVal = this.e1.evaluate(env);
-      const newEnv = new Env(funVal.e, funVal.fun.x, this.e2.evaluate(env));
+      const newEnv = new Env(funVal.env, funVal.fun.x, this.e2.evaluate(env));
       return funVal.fun.e.evaluate(newEnv);
     }
   }
@@ -261,7 +261,7 @@ ${parser.parse(`${env2} |- ${e2} evalto ${v}`)};
           throw Error('v1 is not a function');
         }
         const e0 = v1.fun.e;
-        const env2 = new Env(v1.e, v1.fun.x, v2);
+        const env2 = new Env(v1.env, v1.fun.x, v2);
         return `${text()} by E-App {
 ${parser.parse(`${env} |- ${e.e1} evalto ${v1}`)};
 ${parser.parse(`${env} |- ${e.e2} evalto ${v2}`)};
