@@ -93,10 +93,18 @@
       };
       const evaluateIf = (e1, e2, e3) => {
         const v1 = e1.evaluate(env);
-        const v2 = e2.evaluate(env);
-        const v3 = e3.evaluate(env);
-        if (v1.type === 'Bool' && v2.type === 'Int' && v3.type === 'Int') {
-          return v1.value ? v2 : v3;
+        if (v1.type === 'Bool') {
+          if (v1.value) {
+            const v2 = e2.evaluate(env);
+            if (v2.type === 'Int') {
+              return v2;
+            }
+          } else {
+            const v3 = e3.evaluate(env);
+            if (v3.type === 'Int') {
+              return v3;
+            }
+          }
         }
       };
       const evaluateLet = (v, e1, e2) => {
@@ -133,7 +141,7 @@
         case 'let':
           return `let ${this.e1} = ${this.e2} in ${this.e3}`;
         default:
-          return `${this.e1} ${this.op} ${this.e2}`;
+          return `(${this.e1} ${this.op} ${this.e2})`;
       }
     }
   }
@@ -151,6 +159,24 @@
       return new FunValue(env, this);
     }
   }
+  class LetRecExp extends Exp {
+    constructor(x, fun, e) {
+      super('letRec');
+
+      this.x = x;
+      this.fun = fun;
+      this.e = e;
+    }
+    toString() {
+      return `let rec ${this.x} = ${this.fun} in ${this.e}`;
+    }
+    evaluate(env) {
+      const funValue = this.fun.evaluate(env);
+      const recFunValue = new RecFunValue(env, this.x, funValue);
+      const env2 = new Env(env, this.x, recFunValue);
+      return this.e.evaluate(env);
+    }
+  }
   class ApplyExp extends Exp {
     constructor(e1, e2) {
       super('apply');
@@ -164,7 +190,11 @@
     }
     evaluate(env) {
       const funVal = this.e1.evaluate(env);
-      const newEnv = new Env(funVal.env, funVal.fun.x, this.e2.evaluate(env));
+      let newEnv = funVal.env;
+      if (funVal instanceof RecFunValue) {
+        newEnv = new Env(newEnv, funVal.x, funVal)
+      }
+      newEnv = new Env(newEnv, funVal.fun.x, this.e2.evaluate(env));
       return funVal.fun.e.evaluate(newEnv);
     }
   }
@@ -256,16 +286,35 @@ ${parser.parse(`${env2} |- ${e2} evalto ${v}`)};
       const evaluateApply = (e1, e2) => {
         const v1 = e.e1.evaluate(env);
         const v2 = e.e2.evaluate(env);
-        if (!(v1 instanceof FunValue)) {
-          console.log(e);
-          throw Error('v1 is not a function');
-        }
-        const e0 = v1.fun.e;
-        const env2 = new Env(v1.env, v1.fun.x, v2);
-        return `${text()} by E-App {
+        if (v1 instanceof FunValue) {
+          const e0 = v1.fun.e;
+          const env2 = new Env(v1.env, v1.fun.x, v2);
+          return `${text()} by E-App {
 ${parser.parse(`${env} |- ${e.e1} evalto ${v1}`)};
 ${parser.parse(`${env} |- ${e.e2} evalto ${v2}`)};
 ${parser.parse(`${env2} |- ${e0} evalto ${v}`)};
+}`;
+        } else if (v1 instanceof RecFunValue) {
+          const e0 = v1.fun.e;
+          let env2 = new Env(v1.env, v1.x, v1);
+          env2 = new Env(env2, v1.fun.x, v2);
+          return `${text()} by E-AppRec {
+${parser.parse(`${env} |- ${e.e1} evalto ${v1}`)};
+${parser.parse(`${env} |- ${e.e2} evalto ${v2}`)};
+${parser.parse(`${env2} |- ${e0} evalto ${v}`)};
+}`;
+        } else {
+          console.log(e);
+          throw Error('v1 is not a function');
+        }
+      };
+      const evaluateLetRec = (x, fun, e) => {
+        const funValue = fun.evaluate(env);
+        const recFunValue = new RecFunValue(env, x, fun);
+        const env2 = new Env(env, x, recFunValue);
+
+        return `${text()} by E-LetRec {
+${parser.parse(`${env2} |- ${e} evalto ${v}`)};
 }`;
       };
 
@@ -283,6 +332,8 @@ ${parser.parse(`${env2} |- ${e0} evalto ${v}`)};
           return evaluateLet(e.e1, e.e2, e.e3);
         case 'apply':
           return evaluateApply(e.e1, e.e2);
+        case 'letRec':
+          return evaluateLetRec(e.x, e.fun, e.e);
       }
     }
   / i1:Int _ 'plus' _ i2:Int _ 'is' _ i3:Int {
@@ -339,7 +390,8 @@ ExpPrim
   / 'let' _ v:Var _ '=' _ e1:Exp _ 'in' _ e2:Exp {
       return new Exp('let', v, e1, e2);
     }
-  / 'let' _ 'rec' _ x:Var _ '=' _ 'fun' _ y:Var _ '->' _ e1:Exp _ 'in' _ e2:Exp {
+  / 'let' _ 'rec' _ x:Var _ '=' _ fun:Fun _ 'in' _ e:Exp {
+      return new LetRecExp(x, fun, e)
     }
 Fun
   = 'fun' _ x:Var _ '->' _ e:Exp {
@@ -375,6 +427,7 @@ Value
   / FunValue
 FunValue
   = '(' _ e:Env _ ')[' _ fun:Fun _ ']' { return new FunValue(e, fun); }
+  / '(' _ e:Env _ ')[' _ 'rec' _ x:Var _ '=' _ fun:Fun _ ']' { return new RecFunValue(e, x, fun); }
 
 Var
   = !ReservedWord string:[A-Za-z_]+ { return string.join(''); }
