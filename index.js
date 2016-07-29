@@ -30,7 +30,11 @@ parser.parse = (input) => {
   return result.split('\n').map(line => spaces + line).join('\n');
 };
 
+let buffer = '';
 rl.on('line', (input) => {
-  const result = parser.parse(input);
-  console.log(result.split('\n').map(line => line.replace('        ', '')).join('\n'));
+  buffer += input + ' ';
+  if (input === '') {
+    const result = parser.parse(buffer);
+    console.log(result.split('\n').map(line => line.replace('        ', '')).join('\n'));
+  }
 });
