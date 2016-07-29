@@ -10,7 +10,7 @@
   }
   class FunValue extends Value {
     constructor(env, fun) {
-      super();
+      super('FunValue');
 
       this.env = env;
       this.fun = fun;
@@ -21,7 +21,7 @@
   }
   class RecFunValue extends Value {
     constructor(env, x, fun) {
-      super();
+      super('RecFunValue');
 
       this.env = env;
       this.x = x;
@@ -33,7 +33,7 @@
   }
   class ArrayValue extends Value {
     constructor(value = null, arrayValue = null) {
-      super();
+      super('ArrayValue');
 
       this.value = value;
       this.arrayValue = arrayValue;
@@ -77,76 +77,6 @@
       this.e2 = e2;
       this.e3 = e3;
     }
-    evaluate(env) {
-      // XXX: parserでやればevaluateいらなさそう...
-      const evaluateOp = (op, e1, e2) => {
-        const v1 = e1.evaluate(env);
-        const v2 = e2.evaluate(env);
-        switch (op) {
-          case '+':
-            if (v1.type === 'Int' && v2.type === 'Int') {
-              return new Value('Int', v1.value + v2.value);
-            }
-            break;
-          case '-':
-            if (v1.type === 'Int' && v2.type === 'Int') {
-              return new Value('Int', v1.value - v2.value);
-            }
-            break;
-          case '*':
-            if (v1.type === 'Int' && v2.type === 'Int') {
-              return new Value('Int', v1.value * v2.value);
-            }
-            break;
-          case '<':
-            if (v1.type === 'Int' && v2.type === 'Int') {
-              return new Value('Bool', v1.value < v2.value);
-            }
-            break;
-        }
-
-        return new Value('Error', 'error');
-      };
-      const evaluateIf = (e1, e2, e3) => {
-        const v1 = e1.evaluate(env);
-        if (v1.type === 'Bool') {
-          if (v1.value) {
-            const v2 = e2.evaluate(env);
-            if (v2.type === 'Int') {
-              return v2;
-            }
-          } else {
-            const v3 = e3.evaluate(env);
-            if (v3.type === 'Int') {
-              return v3;
-            }
-          }
-        }
-      };
-      const evaluateLet = (v, e1, e2) => {
-        const v1 = e1.evaluate(env);
-        const env2 = new Env(env, v, v1);
-        return e2.evaluate(env2);
-      };
-
-      switch (this.op) {
-        case 'Var':
-          return env.resolve(this.e1);
-        case 'Value':
-          return this.e1;
-        case '+':
-        case '-':
-        case '*':
-        case '<':
-          return evaluateOp(this.op, this.e1, this.e2);
-        case 'if':
-          return evaluateIf(this.e1, this.e2, this.e3);
-        case 'let':
-          return evaluateLet(this.e1, this.e2, this.e3);
-      }
-
-      return new Value('Error', 'error');
-    }
     toString() {
       switch (this.op) {
         case 'Var':
@@ -171,9 +101,6 @@
     toString() {
       return `fun ${this.x} -> ${this.e}`;
     }
-    evaluate(env) {
-      return new FunValue(env, this);
-    }
   }
   class LetRecExp extends Exp {
     constructor(x, fun, e) {
@@ -186,12 +113,6 @@
     toString() {
       return `let rec ${this.x} = ${this.fun} in ${this.e}`;
     }
-    evaluate(env) {
-      const funValue = this.fun.evaluate(env);
-      const recFunValue = new RecFunValue(env, this.x, funValue);
-      const env2 = new Env(env, this.x, recFunValue);
-      return this.e.evaluate(env);
-    }
   }
   class ApplyExp extends Exp {
     constructor(e1, e2) {
@@ -201,17 +122,8 @@
       this.e2 = e2;
     }
     toString() {
-      const e2 = (this.e2 instanceof FunExp) ? `(${this.e2})` : this.e2.toString();
+      const e2 = (this.e2.op === 'fun') ? `(${this.e2})` : this.e2.toString();
       return `(${this.e1} ${e2})`;
-    }
-    evaluate(env) {
-      const funVal = this.e1.evaluate(env);
-      let newEnv = funVal.env;
-      if (funVal instanceof RecFunValue) {
-        newEnv = new Env(newEnv, funVal.x, funVal)
-      }
-      newEnv = new Env(newEnv, funVal.fun.x, this.e2.evaluate(env));
-      return funVal.fun.e.evaluate(newEnv);
     }
   }
   class ArrayExp extends Exp {
@@ -228,16 +140,6 @@
         return `[]`;
       }
     }
-    evaluate(env) {
-      if (this.e !== null && this.arrayExp !== null) {
-        return new ArrayValue(
-          this.e.evaluate(env),
-          this.arrayExp.evaluate(env)
-        );
-      } else {
-        return new ArrayValue();
-      }
-    }
   }
   class MatchExp extends Exp {
     constructor(e1, e2, x, y, e3) {
@@ -252,160 +154,135 @@
     toString() {
       return `match ${this.e1} with [] -> ${this.e2} | ${this.x} :: ${this.y} -> ${this.e3}`;
     }
-    evaluate(env) {
-      const v1 = this.e1.evaluate(env);
-      if (v1.value === null) {
-        return this.e2.evaluate(env);
-      } else {
-        let newEnv = new Env(env, this.x, v1.value);
-        newEnv = new Env(newEnv, this.y, v1.arrayValue);
-        return this.e3.evaluate(newEnv);
-      }
-    }
   }
+
+  const parse = (text) => {
+    const rule = parser.parse(text);
+    return [parser.returnValue, rule];
+  };
 }
 
 start
-  = _ EvalML3 _
+  = _ EvalML4 _
 
-EvalML3
-  = env:Env _ '|-' _ i1:Int _ 'evalto' _ i2:Int {
-      // TODO: check if i1 === i2
-      return `${text()} by E-Int {}`;
+EvalML4
+  = env:Env _ '|-' _ i:Int _ 'evalto' {
+      const v = new Value('Int', i);
+      parser.returnValue = v;
+      return `${text()} ${i} by E-Int {};`;
     }
-  / env:Env _ '|-' _ b1:Bool _ 'evalto' _ b2:Bool {
-      // TODO: check if b1 === b2
-      return `${text()} by E-Bool {}`;
+  / env:Env _ '|-' _ b:Bool _ 'evalto' {
+      const v = new Value('Bool', b);
+      parser.returnValue = v;
+      return `${text()} ${v} by E-Bool {};`;
     }
-  / env:Env _ '|-' _ b1:Bool _ 'evalto' _ b2:Bool {
-      // TODO: check if b1 === b2
-      return `${text()} by E-Bool {}`;
+  / env:Env _ '|-' _ x:Var _ 'evalto' {
+      const v = env.resolve(x);
+      parser.returnValue = v;
+      return `${text()} ${v} by E-Var {};`;
     }
-  / env:Env _ '|-' _ x:Var _ 'evalto' _ v:Value {
-      // TODO: check if env.resolve(x) === v
-      return `${text()} by E-Var {}`;
-    }
-  / env:Env _ '|-' _ e:Fun _ 'evalto' _ v:FunValue {
-      return `${text()} by E-Fun {}`;
+  / env:Env _ '|-' _ e:Fun _ 'evalto' {
+      const v = new FunValue(env, e);
+      parser.returnValue = v;
+      return `${text()} ${v} by E-Fun {};`;
     }
   / env:Env _ '|-' _ e:Exp _ 'evalto' _ v:Value {
+      return parser.parse(`${env} |- ${e} evalto`);
+    }
+  / env:Env _ '|-' _ e:Exp _ 'evalto' {
+      const result = (v, rule, subRules = []) => {
+        subRules = subRules.join('\n');
+        parser.returnValue = v;
+        return `${text()} ${v} by ${rule} {\n${subRules}\n};`;
+      };
       const evaluateOp = (op, e1, e2) => {
-        const v1 = e1.evaluate(env);
-        const v2 = e2.evaluate(env);
+        const [v1, e1Rule] = parse(`${env} |- ${e1} evalto`);
+        const [v2, e2Rule] = parse(`${env} |- ${e2} evalto`);
+        let v;
         switch (op) {
           case '+':
-            return `${text()} by E-Plus {
-${parser.parse(`${env} |- ${e1} evalto ${v1.value}`)};
-${parser.parse(`${env} |- ${e2} evalto ${v2.value}`)};
-${parser.parse(`${v1.value} plus ${v2.value} is ${v}`)};
-}`;
+            v = new Value('Int', v1.value + v2.value);
+            const plusRule = parser.parse(`${v1.value} plus ${v2.value} is ${v}`);
+            return result(v, 'E-Plus', [e1Rule, e2Rule, plusRule]);
           case '-':
-            return `${text()} by E-Minus {
-${parser.parse(`${env} |- ${e1} evalto ${v1.value}`)};
-${parser.parse(`${env} |- ${e2} evalto ${v2.value}`)};
-${parser.parse(`${v1.value} minus ${v2.value} is ${v}`)};
-}`;
+            v = new Value('Int', v1.value - v2.value);
+            const minusRule = parser.parse(`${v1.value} minus ${v2.value} is ${v}`);
+            return result(v, 'E-Minus', [e1Rule, e2Rule, minusRule]);
           case '*':
-            return `${text()} by E-Times {
-${parser.parse(`${env} |- ${e1} evalto ${v1.value}`)};
-${parser.parse(`${env} |- ${e2} evalto ${v2.value}`)};
-${parser.parse(`${v1.value} times ${v2.value} is ${v}`)};
-}`;
+            v = new Value('Int', v1.value * v2.value);
+            const timesRule = parser.parse(`${v1.value} times ${v2.value} is ${v}`);
+            return result(v, 'E-Times', [e1Rule, e2Rule, timesRule]);
           case '<':
-            return `${text()} by E-Lt {
-${parser.parse(`${env} |- ${e1} evalto ${v1.value}`)};
-${parser.parse(`${env} |- ${e2} evalto ${v2.value}`)};
-${parser.parse(`${v1.value} less than ${v2.value} is ${v}`)};
-}`;
+            v = new Value('Bool', v1.value < v2.value);
+            const ltRule = parser.parse(`${v1.value} less than ${v2.value} is ${v}`);
+            return result(v, 'E-Lt', [e1Rule, e2Rule, ltRule]);
         }
 
         return new Value('Error', 'error');
       };
       const evaluateIf = (e1, e2, e3) => {
-        const v1 = e1.evaluate(env);
-        const v2 = e2.evaluate(env);
-        const v3 = e3.evaluate(env);
+        const [v1, e1Rule] = parse(`${env} |- ${e.e1} evalto`);
         if (v1.value) {
-          return `${text()} by E-IfT {
-${parser.parse(`${env} |- ${e.e1} evalto true`)};
-${parser.parse(`${env} |- ${e.e2} evalto ${v}`)};
-}`;
+          const [v2, e2Rule] = parse(`${env} |- ${e.e2} evalto`);
+          return result(v2, 'E-IfT', [e1Rule, e2Rule]);
         } else {
-          return `${text()} by E-IfF {
-${parser.parse(`${env} |- ${e.e1} evalto false`)};
-${parser.parse(`${env} |- ${e.e3} evalto ${v}`)};
-}`;
+          const [v3, e3Rule] = parse(`${env} |- ${e.e3} evalto`);
+          return result(v3, 'E-IfF', [e1Rule, e3Rule]);
         }
       };
       const evaluateLet = (variable, e1, e2) => {
-        const v1 = e1.evaluate(env);
+        const [v1, e1Rule] = parse(`${env} |- ${e1} evalto`);
         const env2 = new Env(env, variable, v1);
-
-        return `${text()} by E-Let {
-${parser.parse(`${env} |- ${e1} evalto ${v1}`)};
-${parser.parse(`${env2} |- ${e2} evalto ${v}`)};
-}`;
+        const [v2, e2Rule] = parse(`${env2} |- ${e2} evalto`);
+        return result(v2, 'E-Let', [e1Rule, e2Rule]);
       };
       const evaluateApply = (e1, e2) => {
-        const v1 = e.e1.evaluate(env);
-        const v2 = e.e2.evaluate(env);
-        if (v1 instanceof FunValue) {
+        const [v1, e1Rule] = parse(`${env} |- ${e.e1} evalto`);
+        const [v2, e2Rule] = parse(`${env} |- ${e.e2} evalto`);
+
+        if (v1.type === 'FunValue') {
           const e0 = v1.fun.e;
           const env2 = new Env(v1.env, v1.fun.x, v2);
-          return `${text()} by E-App {
-${parser.parse(`${env} |- ${e.e1} evalto ${v1}`)};
-${parser.parse(`${env} |- ${e.e2} evalto ${v2}`)};
-${parser.parse(`${env2} |- ${e0} evalto ${v}`)};
-}`;
-        } else if (v1 instanceof RecFunValue) {
+          const [v, e0Rule] = parse(`${env2} |- ${e0} evalto`);
+          return result(v, 'E-App', [e1Rule, e2Rule, e0Rule]);
+        }
+
+        if (v1.type === 'RecFunValue') {
           const e0 = v1.fun.e;
           let env2 = new Env(v1.env, v1.x, v1);
           env2 = new Env(env2, v1.fun.x, v2);
-          return `${text()} by E-AppRec {
-${parser.parse(`${env} |- ${e.e1} evalto ${v1}`)};
-${parser.parse(`${env} |- ${e.e2} evalto ${v2}`)};
-${parser.parse(`${env2} |- ${e0} evalto ${v}`)};
-}`;
-        } else {
-          console.log(e);
-          throw Error('v1 is not a function');
+          const [v0, e0Rule] = parse(`${env2} |- ${e0} evalto`);
+          return result(v0, 'E-AppRec', [e1Rule, e2Rule, e0Rule]);
         }
+
+        console.log(e);
+        throw Error('v1 is not a function');
       };
       const evaluateLetRec = (x, fun, e) => {
-        const funValue = fun.evaluate(env);
         const recFunValue = new RecFunValue(env, x, fun);
         const env2 = new Env(env, x, recFunValue);
-
-        return `${text()} by E-LetRec {
-${parser.parse(`${env2} |- ${e} evalto ${v}`)};
-}`;
+        const [v, eRule] = parse(`${env2} |- ${e} evalto`);
+        return result(v, 'E-LetRec', [eRule]);
       };
       const evaluateArray = (e, arrayExp) => {
         if (e !== null && arrayExp !== null) {
-          const v1 = e.evaluate(env);
-          const v2 = arrayExp.evaluate(env);
-          return `${text()} by E-Cons {
-${parser.parse(`${env} |- ${e} evalto ${v1}`)};
-${parser.parse(`${env} |- ${arrayExp} evalto ${v2}`)};
-}`;
+          const [v1, eRule] = parse(`${env} |- ${e} evalto`);
+          const [v2, arrayExpRule] = parse(`${env} |- ${arrayExp} evalto`);
+          return result(new ArrayValue(v1, v2), 'E-Cons', [eRule, arrayExpRule]);
         } else {
-          return `${text()} by E-Nil {}`;
+          return result(new ArrayValue(), 'E-Nil');
         }
       };
       const evaluateMatch = (e1, e2, x, y, e3) => {
-        const v1 = e1.evaluate(env);
+        const [v1, e1Rule] = parse(`${env} |- ${e1} evalto`);
         if (v1.value === null) {
-          return `${text()} by E-MatchNil {
-${parser.parse(`${env} |- ${e1} evalto ${v1}`)};
-${parser.parse(`${env} |- ${e2} evalto ${e2.evaluate(env)}`)};
-}`;
+          const [v2, e2Rule] = parse(`${env} |- ${e2} evalto`);
+          return result(v2, 'E-MatchNil', [e1Rule, e2Rule]);
         } else {
           let newEnv = new Env(env, x, v1.value);
           newEnv = new Env(newEnv, y, v1.arrayValue);
-          return `${text()} by E-MatchCons {
-${parser.parse(`${env} |- ${e1} evalto ${v1}`)};
-${parser.parse(`${newEnv} |- ${e3} evalto ${e3.evaluate(newEnv)}`)};
-}`;
+          const [v3, e3Rule] = parse(`${newEnv} |- ${e3} evalto`);
+          return result(v3, 'E-MatchCons', [e1Rule, e3Rule]);
         }
       };
 
@@ -433,19 +310,19 @@ ${parser.parse(`${newEnv} |- ${e3} evalto ${e3.evaluate(newEnv)}`)};
     }
   / i1:Int _ 'plus' _ i2:Int _ 'is' _ i3:Int {
       // TODO: check
-      return `${text()} by B-Plus {}`;
+      return `${text()} by B-Plus {};`;
     }
   / i1:Int _ 'minus' _ i2:Int _ 'is' _ i3:Int {
       // TODO: check
-      return `${text()} by B-Minus {}`;
+      return `${text()} by B-Minus {};`;
     }
   / i1:Int _ 'times' _ i2:Int _ 'is' _ i3:Int {
       // TODO: check
-      return `${text()} by B-Times {}`;
+      return `${text()} by B-Times {};`;
     }
   / i1:Int _ 'less' _ 'than' _ i2:Int _ 'is' _ b3:Bool {
       // TODO: check
-      return `${text()} by B-Lt {}`;
+      return `${text()} by B-Lt {};`;
     }
 
 Exp

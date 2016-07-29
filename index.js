@@ -36,5 +36,6 @@ rl.on('line', (input) => {
   if (input === '') {
     const result = parser.parse(buffer);
     console.log(result.split('\n').map(line => line.replace('        ', '')).join('\n'));
+    buffer = '';
   }
 });
