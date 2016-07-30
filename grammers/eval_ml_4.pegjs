@@ -56,7 +56,7 @@
     }
     toString() {
       if (this.arrayValue !== null && this.value !== null) {
-        return `${this.value} :: ${this.arrayValue}`;
+        return `(${this.value} :: ${this.arrayValue})`;
       } else {
         return `[]`;
       }
@@ -151,7 +151,7 @@
     }
     toString() {
       if (this.arrayExp !== null && this.e !== null) {
-        return `${this.e} :: ${this.arrayExp}`;
+        return `(${this.e} :: ${this.arrayExp})`;
       } else {
         return `[]`;
       }
@@ -420,6 +420,7 @@ Env
 Value
   = ArrayValue
   / PrimValue
+  / '(' _ v:Value _ ')' { return v; }
 PrimValue
   = i:Int { return new IntValue(i); }
   / b:Bool { return new BoolValue(b); }
@@ -429,6 +430,7 @@ ArrayValue
   = value:PrimValue _ '::' _ arrayValue:ArrayValue {
       return new ArrayValue(value, arrayValue);
     }
+  / '(' _ arrayValue:ArrayValue _ ')' { return arrayValue; }
   / '[]' { return new ArrayValue(); }
 FunValue
   = '(' _ e:Env _ ')[' _ fun:Fun _ ']' { return new FunValue(e, fun); }

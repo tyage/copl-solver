@@ -27,7 +27,7 @@ parser.parse = (input) => {
   console.log(`${spaces}---- parse end ${indent} -----`);
   indent--;
 
-  return result;
+  return result.split('\n').map(line => '  ' + line).join('\n');
 };
 
 let buffer = '';
