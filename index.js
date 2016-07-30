@@ -20,14 +20,14 @@ parser.parse = (input) => {
   indent++;
   console.log(`${spaces}---- parse start ${indent} -----`);
 
-  console.log(input);
+  console.log(spaces + input);
 
   const result = Array.prototype.concat.apply([], parse(input)).join('');
 
   console.log(`${spaces}---- parse end ${indent} -----`);
   indent--;
 
-  return result.split('\n').map(line => spaces + line).join('\n');
+  return result;
 };
 
 let buffer = '';
@@ -35,7 +35,7 @@ rl.on('line', (input) => {
   buffer += input + ' ';
   if (input === '') {
     const result = parser.parse(buffer);
-    console.log(result.split('\n').map(line => line.replace('        ', '')).join('\n'));
+    console.log(result);
     buffer = '';
   }
 });

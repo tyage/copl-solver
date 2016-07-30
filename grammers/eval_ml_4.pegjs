@@ -1,11 +1,27 @@
 {
   class Value {
-    constructor(type, value) {
+    constructor(type) {
       this.type = type;
-      this.value = value;
+    }
+  }
+  class BoolValue extends Value {
+    constructor(b) {
+      super('BoolValue');
+
+      this.b = b;
     }
     toString() {
-      return this.value;
+      return this.b;
+    }
+  }
+  class IntValue extends Value {
+    constructor(i) {
+      super('IntValue');
+
+      this.i = i;
+    }
+    toString() {
+      return this.i.toString();
     }
   }
   class FunValue extends Value {
@@ -167,12 +183,12 @@ start
 
 EvalML4
   = env:Env _ '|-' _ i:Int _ 'evalto' {
-      const v = new Value('Int', i);
+      const v = new IntValue(i);
       parser.returnValue = v;
       return `${text()} ${i} by E-Int {};`;
     }
   / env:Env _ '|-' _ b:Bool _ 'evalto' {
-      const v = new Value('Bool', b);
+      const v = new BoolValue(b);
       parser.returnValue = v;
       return `${text()} ${v} by E-Bool {};`;
     }
@@ -191,7 +207,8 @@ EvalML4
     }
   / env:Env _ '|-' _ e:Exp _ 'evalto' {
       const result = (v, rule, subRules = []) => {
-        subRules = subRules.join('\n');
+        const indent = ' '.repeat(2);
+        subRules = subRules.map(rule => indent + rule).join('\n');
         parser.returnValue = v;
         return `${text()} ${v} by ${rule} {\n${subRules}\n};`;
       };
@@ -201,28 +218,26 @@ EvalML4
         let v;
         switch (op) {
           case '+':
-            v = new Value('Int', v1.value + v2.value);
-            const plusRule = parser.parse(`${v1.value} plus ${v2.value} is ${v}`);
+            v = new IntValue(v1.i + v2.i);
+            const plusRule = parser.parse(`${v1.i} plus ${v2.i} is ${v}`);
             return result(v, 'E-Plus', [e1Rule, e2Rule, plusRule]);
           case '-':
-            v = new Value('Int', v1.value - v2.value);
-            const minusRule = parser.parse(`${v1.value} minus ${v2.value} is ${v}`);
+            v = new IntValue(v1.i - v2.i);
+            const minusRule = parser.parse(`${v1.i} minus ${v2.i} is ${v}`);
             return result(v, 'E-Minus', [e1Rule, e2Rule, minusRule]);
           case '*':
-            v = new Value('Int', v1.value * v2.value);
-            const timesRule = parser.parse(`${v1.value} times ${v2.value} is ${v}`);
+            v = new IntValue(v1.i * v2.i);
+            const timesRule = parser.parse(`${v1.i} times ${v2.i} is ${v}`);
             return result(v, 'E-Times', [e1Rule, e2Rule, timesRule]);
           case '<':
-            v = new Value('Bool', v1.value < v2.value);
-            const ltRule = parser.parse(`${v1.value} less than ${v2.value} is ${v}`);
+            v = new BoolValue(v1.i < v2.i);
+            const ltRule = parser.parse(`${v1.i} less than ${v2.i} is ${v}`);
             return result(v, 'E-Lt', [e1Rule, e2Rule, ltRule]);
         }
-
-        return new Value('Error', 'error');
       };
       const evaluateIf = (e1, e2, e3) => {
         const [v1, e1Rule] = parse(`${env} |- ${e.e1} evalto`);
-        if (v1.value) {
+        if (v1.b) {
           const [v2, e2Rule] = parse(`${env} |- ${e.e2} evalto`);
           return result(v2, 'E-IfT', [e1Rule, e2Rule]);
         } else {
@@ -406,8 +421,8 @@ Value
   = ArrayValue
   / PrimValue
 PrimValue
-  = i:Int { return new Value('Int', i); }
-  / b:Bool { return new Value('Bool', b); }
+  = i:Int { return new IntValue(i); }
+  / b:Bool { return new BoolValue(b); }
   / FunValue
   / RecFunValue
 ArrayValue
