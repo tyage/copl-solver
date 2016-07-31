@@ -115,7 +115,7 @@
       this.e = e;
     }
     toString() {
-      return `fun ${this.x} -> ${this.e}`;
+      return `(fun ${this.x} -> ${this.e})`;
     }
   }
   class LetRecExp extends Exp {
