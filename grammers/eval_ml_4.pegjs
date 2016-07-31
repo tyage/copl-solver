@@ -430,6 +430,9 @@ ArrayValue
   = value:PrimValue _ '::' _ arrayValue:ArrayValue {
       return new ArrayValue(value, arrayValue);
     }
+  / '(' _ value:ArrayValue _ ')' _ '::' _ arrayValue:ArrayValue {
+      return new ArrayValue(value, arrayValue);
+    }
   / '(' _ arrayValue:ArrayValue _ ')' { return arrayValue; }
   / '[]' { return new ArrayValue(); }
 FunValue
@@ -438,10 +441,10 @@ RecFunValue
   = '(' _ e:Env _ ')[' _ 'rec' _ x:Var _ '=' _ fun:Fun _ ']' { return new RecFunValue(e, x, fun); }
 
 Var
-  = !ReservedWord string:[A-Za-z_]+ { return string.join(''); }
+  = !ReservedWord string:[A-Za-z0-9_]+ { return string.join(''); }
 
 ReservedWord
-  = ( "let" / "rec" / "fun" / "evalto" / "if" / "else" / "then" / "in" / "match" / "with") ![A-Za-z_]
+  = ( "let" / "rec" / "fun" / "evalto" / "if" / "else" / "then" / "in" / "match" / "with") ![A-Za-z0-9_]
 
 Bool
   = 'true' { return true; }
