@@ -25,7 +25,11 @@
   class Exp {
     constructor() {}
     createRule(env, type, rule, rules = []) {
-      return `${env} |- ${this.toString()} : ${type} by ${rule} {\n${rules.join('\n')}\n};`;
+      // 遅延評価する
+      return () => {
+        rules = rules.map(r => r()).join('\n');
+        return `${env} |- ${this.toString()} : ${type} by ${rule} {\n${rules}\n};`;
+      };
     }
   }
   class LetExp extends Exp {
@@ -76,8 +80,12 @@
       const [e2Type, e2Rule] = this.e2.resolveType(env);
       const [e3Type, e3Rule] = this.e3.resolveType(env);
 
-      if (e1Type !== 'bool' || e2Type !== e3Type) {
-        throw new Error(`type of IfExp does not match: ${e1Type} !== 'bool' or ${e2Type} !== ${e3Type}`);
+      e1Type.toType().shouldBe(new BoolType());
+      if (e2Type.toType() instanceof UndefinedType) {
+        e2Type.shouldBe(e3Type);
+      }
+      if (e3Type.toType() instanceof UndefinedType) {
+        e3Type.shouldBe(e2Type);
       }
 
       return [e2Type, this.createRule(env, e2Type, 'T-If', [e1Rule, e2Rule, e3Rule])];
@@ -93,7 +101,8 @@
       return this.value;
     }
     resolveType(env) {
-      return ['int', this.createRule(env, 'int', 'T-Int')];
+      const type = new IntType();
+      return [type, this.createRule(env, type, 'T-Int')];
     }
   }
   class BoolExp extends Exp {
@@ -106,7 +115,8 @@
       return this.value;
     }
     resolveType(env) {
-      return ['bool', this.createRule(env, 'bool', 'T-Bool')];
+      const type = new BoolType();
+      return [type, this.createRule(env, type, 'T-Bool')];
     }
   }
   // op =  '-' / '+' / '*' / '<'
@@ -125,24 +135,27 @@
       const [e1Type, e1Rule] = this.e1.resolveType(env);
       const [e2Type, e2Rule] = this.e2.resolveType(env);
 
+      e1Type.shouldBe(new IntType());
+      e2Type.shouldBe(new IntType());
+
       let opType = null;
       let rule = null;
       switch (this.op) {
         case '-':
           rule = 'T-Minus';
-          opType = 'int';
+          opType = new IntType();
           break;
         case '+':
           rule = 'T-Plus';
-          opType = 'int';
+          opType = new IntType();
           break;
         case '*':
           rule = 'T-Times';
-          opType = 'int';
+          opType = new IntType();
           break;
         case '<':
           rule = 'T-Lt';
-          opType = 'bool';
+          opType = new BoolType();
           break;
       }
 
@@ -160,9 +173,10 @@
       return `(fun ${this.x} -> ${this.e})`;
     }
     resolveType(env) {
-      const newEnv = new Env(env, this.x, new UndefinedType());
+      const xType = new UndefinedType();
+      const newEnv = new Env(env, this.x, xType);
       const [eType, eRule] = this.e.resolveType(newEnv);
-      const type = new FunType(typeHint.t1, eType);
+      const type = new FunType(xType, eType);
       return [type, this.createRule(env, type, 'T-Fun', [eRule])];
     }
   }
@@ -190,14 +204,15 @@
       return `(${this.e1} ${e2})`;
     }
     resolveType(env) {
+      const [e1Type, e1Rule] = this.e1.resolveType(env);
       const [e2Type, e2Rule] = this.e2.resolveType(env);
-      const [e1Type, e1Rule] = this.e1.resolveType(env, new FunType(e2Type, null));
 
-      if (e1Type.t1 !== e2Type) {
-        throw new Error(`type of ApplyExp does not match: ${e1Type.t1} !== ${e2Type}`);
+      if (e1Type.toType() instanceof UndefinedType) {
+        e1Type.shouldBe(new FunType(new UndefinedType(), new UndefinedType()));
       }
+      e1Type.toType().t1.shouldBe(e2Type);
 
-      return [e1Type.t2, this.createRule(env, e1Type.t2, 'T-App', [e1Rule, e2Rule])];
+      return [e1Type.toType().t2, this.createRule(env, e1Type.toType().t2, 'T-App', [e1Rule, e2Rule])];
     }
   }
   class ArrayExp extends Exp {
@@ -230,15 +245,50 @@
     }
   }
 
-  class Type {}
+  let typeIndex = 0;
+  class Type {
+    toType() {
+      return this;
+    }
+    shouldBe() {
+    }
+  }
+  class IntType extends Type {
+    toString() {
+      return 'int';
+    }
+  }
+  class BoolType extends Type {
+    toString() {
+      return 'bool';
+    }
+  }
   class FunType extends Type {
     constructor(t1, t2) {
       super();
+
       this.t1 = t1;
       this.t2 = t2;
     }
     toString() {
-      return `${this.t1} -> ${this.t2}`;
+      return `(${this.t1} -> ${this.t2})`;
+    }
+  }
+  class UndefinedType extends Type {
+    constructor() {
+      super();
+
+      this.type = null;
+      this.typeIndex = ++typeIndex;
+    }
+    shouldBe(type) {
+      this.type = type;
+    }
+    toType() {
+      return this.type === null ? this : this.type.toType();
+    }
+    toString() {
+      return this.type === null ? `t${this.typeIndex}` : this.type.toString();
     }
   }
 }
@@ -249,7 +299,7 @@ start
 EvalML4
   = env:Env _ '|-' _ e:Exp _ ':' _ type:Types {
       console.log(e);
-      return e.resolveType(env)[1];
+      return e.resolveType(env)[1]();
     }
 
 Exp
@@ -286,7 +336,7 @@ ExpArray
   / '[]' { return new ArrayExp() }
   / ExpApply
 ExpApply
-  = v:Var _ arg0:ExpArray args:(_ ExpArray)* {
+  = v:Var _ arg0:ExpPrim args:(_ ExpPrim)* {
       let apply = new ApplyExp(new VarExp(v), arg0);
       args.forEach(arg => {
         apply = new ApplyExp(apply, arg[1]);
@@ -346,10 +396,13 @@ FunTypes
       });
       return new FunType(type, typeList);
     }
+  / '(' _ t1:FunTypes _ ')' _ '->' _ t2:FunTypes {
+      return new FunType(t1, t2);
+    }
   / PrimTypes
 PrimTypes
-  = 'bool'
-  / 'int'
+  = 'bool' { new BoolType() }
+  / 'int' { new IntType() }
 
 Var
   = !ReservedWord string:[A-Za-z0-9_]+ { return string.join(''); }
