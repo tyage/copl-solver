@@ -229,6 +229,24 @@
         return `[]`;
       }
     }
+    resolveType(env) {
+      if (this.arrayExp !== null && this.e !== null) {
+        const [eType, eRule] = this.e.resolveType(env);
+        const [tailType, tailRule] = this.arrayExp.resolveType(env);
+
+        if (tailType.toType() instanceof UndefinedType) {
+          tailType.shouldBe(new ListType(eType));
+        }
+        if (eType.toType() instanceof UndefinedType) {
+          eType.shouldBe(tailType.type);
+        }
+
+        return [tailType, this.createRule(env, tailType, 'T-Cons', [eRule, tailRule])];
+      } else {
+        const type = new UndefinedType();
+        return [type, this.createRule(env, type, 'T-Nil')];
+      }
+    }
   }
   class MatchExp extends Exp {
     constructor(e1, e2, x, y, e3) {
@@ -263,6 +281,15 @@
       return 'bool';
     }
   }
+  class ListType extends Type {
+    constructor(type) {
+      super();
+      this.type = type;
+    }
+    toString() {
+      return `${this.type} list`;
+    }
+  }
   class FunType extends Type {
     constructor(t1, t2) {
       super();
@@ -272,6 +299,14 @@
     }
     toString() {
       return `(${this.t1} -> ${this.t2})`;
+    }
+    shouldBe(type) {
+      if (!(type instanceof FunType)) {
+        throw new Error(`${type} is not fun type`)
+      }
+
+      this.t1.shouldBe(type.t1);
+      this.t2.shouldBe(type.t2);
     }
   }
   class UndefinedType extends Type {
@@ -299,7 +334,9 @@ start
 EvalML4
   = env:Env _ '|-' _ e:Exp _ ':' _ type:Types {
       console.log(e);
-      return e.resolveType(env)[1]();
+      const [resolvedType, rule] = e.resolveType(env);
+      resolvedType.shouldBe(type);
+      return rule();
     }
 
 Exp
@@ -401,8 +438,8 @@ FunTypes
     }
   / PrimTypes
 PrimTypes
-  = 'bool' { new BoolType() }
-  / 'int' { new IntType() }
+  = 'bool' { return new BoolType() }
+  / 'int' { return new IntType() }
 
 Var
   = !ReservedWord string:[A-Za-z0-9_]+ { return string.join(''); }
