@@ -208,7 +208,7 @@
       const [e2Type, e2Rule] = this.e2.resolveType(env);
 
       if (e1Type.toType() instanceof UndefinedType) {
-        e1Type.shouldBe(new FunType(new UndefinedType(), new UndefinedType()));
+        e1Type.toType().shouldBe(new FunType(new UndefinedType(), new UndefinedType()));
       }
       e1Type.toType().t1.shouldBe(e2Type);
 
@@ -268,7 +268,8 @@
     toType() {
       return this;
     }
-    shouldBe() {
+    shouldBe(type) {
+      console.log(`${this} is ${type}`);
     }
   }
   class IntType extends Type {
@@ -301,12 +302,14 @@
       return `(${this.t1} -> ${this.t2})`;
     }
     shouldBe(type) {
+      console.log(`${this} is ${type}`);
+
       if (!(type instanceof FunType)) {
-        throw new Error(`${type} is not fun type`)
+        throw new Error(`${type} is not fun type`);
       }
 
-      this.t1.shouldBe(type.t1);
-      this.t2.shouldBe(type.t2);
+      this.t1.toType().shouldBe(type.t1);
+      this.t2.toType().shouldBe(type.t2);
     }
   }
   class UndefinedType extends Type {
@@ -317,6 +320,11 @@
       this.typeIndex = ++typeIndex;
     }
     shouldBe(type) {
+      console.log(`${this} is ${type}`);
+
+      if (this.type !== null) {
+        this.type.shouldBe(type);
+      }
       this.type = type;
     }
     toType() {
@@ -419,7 +427,9 @@ Env
   / '' { return new Env(); }
 
 Types
-  = type:FunTypes _ 'list'
+  = type:FunTypes _ 'list' {
+      return new ListType(type);
+    }
   / FunTypes
 FunTypes
   = type:PrimTypes types:(_ '->' _ PrimTypes)+ {
