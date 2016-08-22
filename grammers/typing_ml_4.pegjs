@@ -41,7 +41,8 @@
       this.e2 = e2;
     }
     toString() {
-      return `let ${this.v} = ${this.e1} in ${this.e2}`;
+      const e1String = this.e1 instanceof FunExp ? this.e1.toString(false) : this.e1;
+      return `let ${this.v} = ${e1String} in ${this.e2}`;
     }
     resolveType(env) {
       const [e1Type, e1Rule] = this.e1.resolveType(env);
@@ -169,8 +170,12 @@
       this.x = x;
       this.e = e;
     }
-    toString() {
-      return `fun ${this.x} -> ${this.e}`;
+    toString(clause = true) {
+      if (clause) {
+        return `(fun ${this.x} -> ${this.e})`;
+      } else {
+        return `fun ${this.x} -> ${this.e}`;
+      }
     }
     resolveType(env) {
       const xType = new UndefinedType();
@@ -189,7 +194,8 @@
       this.e = e;
     }
     toString() {
-      return `let rec ${this.x} = ${this.fun} in ${this.e}`;
+      const funString = this.fun.toString(false);
+      return `let rec ${this.x} = ${funString} in ${this.e}`;
     }
     resolveType(env) {
       const t1 = new UndefinedType();
@@ -252,9 +258,7 @@
         if (tailType.toType() instanceof UndefinedType) {
           tailType.shouldBe(new ListType(eType));
         }
-        if (eType.toType() instanceof UndefinedType) {
-          eType.shouldBe(tailType.type);
-        }
+        eType.toType().shouldBe(tailType.toType().type.toType());
 
         return [tailType, this.createRule(env, tailType, 'T-Cons', [eRule, tailRule])];
       } else {
@@ -275,6 +279,26 @@
     }
     toString() {
       return `match ${this.e1} with [] -> ${this.e2} | ${this.x} :: ${this.y} -> ${this.e3}`;
+    }
+    resolveType(env) {
+      const [e1Type, e1Rule] = this.e1.resolveType(env);
+      const [e2Type, e2Rule] = this.e2.resolveType(env);
+
+      if (e1Type.toType() instanceof UndefinedType) {
+        e1Type.toType().shouldBe(new ListType(new UndefinedType()));
+      }
+
+      let newEnv = new Env(env, this.x, e1Type.toType().type);
+      newEnv = new Env(newEnv, this.y, e1Type);
+      const [e3Type, e3Rule] = this.e3.resolveType(newEnv);
+
+      if (e2Type.toType() instanceof UndefinedType) {
+        e2Type.toType().shouldBe(e3Type.toType());
+      } else {
+        e3Type.toType().shouldBe(e2Type.toType());
+      }
+
+      return [e3Type, this.createRule(env, e3Type, 'T-Match', [e1Rule, e2Rule, e3Rule])];
     }
   }
 
@@ -302,6 +326,15 @@
       super();
       this.type = type;
     }
+    shouldBe(type) {
+      console.log(`${this} is ${type}`);
+
+      if (type.toType().type.toType() instanceof UndefinedType) {
+        type.toType().type.toType().shouldBe(this.type.toType());
+      } else {
+        this.type.toType().shouldBe(type.toType().type);
+      }
+    }
     toString() {
       return `${this.type} list`;
     }
@@ -323,8 +356,17 @@
         throw new Error(`${type} is not fun type`);
       }
 
-      this.t1.toType().shouldBe(type.toType().t1.toType());
-      this.t2.toType().shouldBe(type.toType().t2.toType());
+      if (this.t1.toType() instanceof UndefinedType) {
+        this.t1.toType().shouldBe(type.toType().t1.toType());
+      } else {
+        type.toType().t1.toType().shouldBe(this.t1.toType());
+      }
+
+      if (this.t2.toType() instanceof UndefinedType) {
+        this.t2.toType().shouldBe(type.toType().t2.toType());
+      } else {
+        type.toType().t2.toType().shouldBe(this.t2.toType());
+      }
     }
   }
   class UndefinedType extends Type {
@@ -449,7 +491,7 @@ Types
     }
   / FunTypes
 FunTypes
-  = type:PrimTypes types:(_ '->' _ PrimTypes)+ {
+  = type:(PrimListTypes / PrimTypes) types:(_ '->' _ (PrimListTypes / PrimTypes))+ {
       let typeList = null;
       types.reverse().forEach(t => {
         if (typeList === null) {
@@ -467,6 +509,11 @@ FunTypes
 PrimTypes
   = 'bool' { return new BoolType() }
   / 'int' { return new IntType() }
+
+PrimListTypes
+  = type:PrimTypes _ 'list' {
+      return new ListType(type);
+    }
 
 Var
   = !ReservedWord string:[A-Za-z0-9_]+ { return string.join(''); }
