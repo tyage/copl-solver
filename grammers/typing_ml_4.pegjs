@@ -170,7 +170,7 @@
       this.e = e;
     }
     toString() {
-      return `(fun ${this.x} -> ${this.e})`;
+      return `fun ${this.x} -> ${this.e}`;
     }
     resolveType(env) {
       const xType = new UndefinedType();
@@ -190,6 +190,21 @@
     }
     toString() {
       return `let rec ${this.x} = ${this.fun} in ${this.e}`;
+    }
+    resolveType(env) {
+      const t1 = new UndefinedType();
+      const t2 = new UndefinedType();
+      const xType = new FunType(t1, t2);
+
+      const newEnv = new Env(env, this.x, xType);
+      const newFunEnv = new Env(newEnv, this.fun.x, t1);
+
+      const [funEType, funERule] = this.fun.e.resolveType(newFunEnv);
+      funEType.shouldBe(t2);
+
+      const [eType, eRule] = this.e.resolveType(newEnv);
+
+      return [eType, this.createRule(env, eType, 'T-LetRec', [funERule, eRule])];
     }
   }
   class ApplyExp extends Exp {
@@ -304,12 +319,12 @@
     shouldBe(type) {
       console.log(`${this} is ${type}`);
 
-      if (!(type instanceof FunType)) {
+      if (!(type.toType() instanceof FunType)) {
         throw new Error(`${type} is not fun type`);
       }
 
-      this.t1.toType().shouldBe(type.t1);
-      this.t2.toType().shouldBe(type.t2);
+      this.t1.toType().shouldBe(type.toType().t1.toType());
+      this.t2.toType().shouldBe(type.toType().t2.toType());
     }
   }
   class UndefinedType extends Type {
@@ -325,7 +340,9 @@
       if (this.type !== null) {
         this.type.shouldBe(type);
       }
-      this.type = type;
+      if (type.typeIndex !== this.typeIndex) {
+        this.type = type;
+      }
     }
     toType() {
       return this.type === null ? this : this.type.toType();
